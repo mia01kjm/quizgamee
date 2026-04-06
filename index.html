@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Master - 영어 단어 퀴즈</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .option-btn { transition: all 0.2s ease; }
+        .correct { background-color: #10b981 !important; color: white !important; border-color: #059669 !important; }
+        .wrong { background-color: #ef4444 !important; color: white !important; border-color: #dc2626 !important; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4">
+
+    <!-- 메인 컨테이너 -->
+    <div id="game-container" class="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+        
+        <!-- 시작 화면 -->
+        <div id="start-screen" class="p-8 text-center space-y-6">
+            <div class="w-20 h-20 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-blue-200">
+                <span class="text-white text-4xl font-bold">W</span>
+            </div>
+            <div class="space-y-2">
+                <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">Word Master</h1>
+                <p class="text-slate-500">10개의 단어 퀴즈에 도전하고<br>랭킹에 이름을 올려보세요!</p>
+            </div>
+            <button id="start-btn" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all transform active:scale-95 shadow-lg shadow-blue-100">
+                게임 시작하기
+            </button>
+        </div>
+
+        <!-- 퀴즈 화면 -->
+        <div id="quiz-screen" class="hidden">
+            <div class="bg-blue-600 p-6 text-white">
+                <div class="flex justify-between items-center mb-4">
+                    <span id="progress-text" class="text-sm font-bold opacity-80 uppercase tracking-widest">Question 1/10</span>
+                    <span id="score-text" class="text-sm font-bold bg-white/20 px-3 py-1 rounded-full">Score: 0</span>
+                </div>
+                <div class="h-2 w-full bg-blue-800/50 rounded-full overflow-hidden">
+                    <div id="progress-bar" class="h-full bg-white transition-all duration-500" style="width: 10%"></div>
+                </div>
+            </div>
+            <div class="p-8 space-y-8">
+                <div class="text-center">
+                    <p class="text-slate-400 text-sm font-bold uppercase tracking-widest mb-2">다음 단어의 뜻은?</p>
+                    <h2 id="question-word" class="text-5xl font-black text-slate-800 tracking-tight">Abundant</h2>
+                </div>
+                <div id="options-container" class="grid gap-3">
+                    <!-- 보기가 여기에 생성됨 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 결과 화면 -->
+        <div id="result-screen" class="hidden p-8 text-center space-y-8">
+            <div class="space-y-2">
+                <h2 class="text-2xl font-bold text-slate-800">퀴즈 완료!</h2>
+                <p class="text-slate-500">당신의 최종 점수는?</p>
+                <div class="text-6xl font-black text-blue-600" id="final-score">0</div>
+            </div>
+            
+            <div id="save-form" class="space-y-4">
+                <input type="text" id="nickname" placeholder="닉네임을 입력하세요" maxlength="10" 
+                    class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:outline-none transition-all text-center font-bold">
+                <button id="save-btn" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-100">
+                    점수 저장 및 랭킹 보기
+                </button>
+            </div>
+
+            <div id="ranking-container" class="hidden space-y-6 pt-4 border-t border-slate-100">
+                <h3 class="text-xl font-bold text-slate-800 flex items-center justify-center gap-2">
+                    🏆 실시간 랭킹 (Top 5)
+                </h3>
+                <div id="ranking-list" class="space-y-2">
+                    <!-- 랭킹 목록 -->
+                </div>
+                <button id="restart-btn" class="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all">
+                    다시 시작하기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase SDK v10 CDN
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // Firebase 설정
+        // YOUR_CONFIG_HERE
+        const firebaseConfig = {
+  apiKey: "AIzaSyA5_1PDdhNLMQAd2wIXUOzMLNt6__GrW2w",
+  authDomain: "kmlquiz-2632f.firebaseapp.com",
+  projectId: "kmlquiz-2632f",
+            storageBucket: "gen-lang-client-0397976244.firebasestorage.app",
+            messagingSenderId: "458496546575",
+            appId: "1:458496546575:web:6e6cf9ed879683f6b6907a"
+        };
+
+        // Firebase 초기화
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // 단어 데이터 (10문제)
+        const wordData = [
+            { english: "Diligent", korean: "부지런한", options: ["게으른", "부지런한", "똑똑한", "용감한"] },
+            { english: "Eloquent", korean: "유창한", options: ["조용한", "유창한", "거친", "슬픈"] },
+            { english: "Frugal", korean: "절약하는", options: ["낭비하는", "절약하는", "부유한", "가난한"] },
+            { english: "Gullible", korean: "잘 속는", options: ["영리한", "잘 속는", "의심많은", "강한"] },
+            { english: "Humble", korean: "겸손한", options: ["거만한", "겸손한", "친절한", "무서운"] },
+            { english: "Lucid", korean: "명료한", options: ["어두운", "명료한", "복잡한", "흐린"] },
+            { english: "Meticulous", korean: "꼼꼼한", options: ["덜렁대는", "꼼꼼한", "빠른", "느린"] },
+            { english: "Prudent", korean: "신중한", options: ["경솔한", "신중한", "활발한", "조용한"] },
+            { english: "Resilient", korean: "회복력 있는", options: ["약한", "회복력 있는", "단단한", "부드러운"] },
+            { english: "Tenacious", korean: "끈기 있는", options: ["포기하는", "끈기 있는", "지루한", "재미있는"] }
+        ];
+
+        let currentIdx = 0;
+        let score = 0;
+        let isAnswering = false;
+
+        // DOM 요소
+        const startScreen = document.getElementById('start-screen');
+        const quizScreen = document.getElementById('quiz-screen');
+        const resultScreen = document.getElementById('result-screen');
+        const optionsContainer = document.getElementById('options-container');
+        const questionWord = document.getElementById('question-word');
+        const progressText = document.getElementById('progress-text');
+        const progressBar = document.getElementById('progress-bar');
+        const scoreText = document.getElementById('score-text');
+        const finalScore = document.getElementById('final-score');
+        const rankingContainer = document.getElementById('ranking-container');
+        const saveForm = document.getElementById('save-form');
+
+        // 게임 시작
+        document.getElementById('start-btn').onclick = () => {
+            startScreen.classList.add('hidden');
+            quizScreen.classList.remove('hidden');
+            loadQuestion();
+        };
+
+        // 문제 로드
+        function loadQuestion() {
+            isAnswering = false;
+            const current = wordData[currentIdx];
+            questionWord.textContent = current.english;
+            progressText.textContent = `Question ${currentIdx + 1}/10`;
+            progressBar.style.width = `${(currentIdx + 1) * 10}%`;
+            scoreText.textContent = `Score: ${score}`;
+
+            optionsContainer.innerHTML = '';
+            current.options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn w-full p-5 text-lg font-semibold text-slate-700 bg-slate-50 border-2 border-slate-100 rounded-2xl hover:border-blue-300 hover:bg-blue-50 transition-all text-left';
+                btn.textContent = opt;
+                btn.onclick = () => handleAnswer(opt, btn);
+                optionsContainer.appendChild(btn);
+            });
+        }
+
+        // 정답 확인
+        function handleAnswer(selected, btn) {
+            if (isAnswering) return;
+            isAnswering = true;
+
+            const correct = wordData[currentIdx].korean;
+            if (selected === correct) {
+                score += 10;
+                btn.classList.add('correct');
+            } else {
+                btn.classList.add('wrong');
+                // 정답 표시
+                Array.from(optionsContainer.children).forEach(child => {
+                    if (child.textContent === correct) child.classList.add('correct');
+                });
+            }
+
+            setTimeout(() => {
+                currentIdx++;
+                if (currentIdx < wordData.length) {
+                    loadQuestion();
+                } else {
+                    showResult();
+                }
+            }, 1200);
+        }
+
+        // 결과 화면
+        function showResult() {
+            quizScreen.classList.add('hidden');
+            resultScreen.classList.remove('hidden');
+            finalScore.textContent = score;
+        }
+
+        // 점수 저장
+        document.getElementById('save-btn').onclick = async () => {
+            const nickname = document.getElementById('nickname').value.trim();
+            if (!nickname) return alert('닉네임을 입력해주세요!');
+
+            try {
+                document.getElementById('save-btn').disabled = true;
+                document.getElementById('save-btn').textContent = '저장 중...';
+                
+                await addDoc(collection(db, "scores"), {
+                    nickname: nickname,
+                    score: score,
+                    timestamp: serverTimestamp()
+                });
+
+                saveForm.classList.add('hidden');
+                rankingContainer.classList.remove('hidden');
+                loadRanking();
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                alert('저장 중 오류가 발생했습니다.');
+                document.getElementById('save-btn').disabled = false;
+                document.getElementById('save-btn').textContent = '점수 저장 및 랭킹 보기';
+            }
+        };
+
+        // 랭킹 로드
+        async function loadRanking() {
+            const rankingList = document.getElementById('ranking-list');
+            rankingList.innerHTML = '<p class="text-slate-400 animate-pulse">랭킹 불러오는 중...</p>';
+
+            try {
+                const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(5));
+                const querySnapshot = await getDocs(q);
+                
+                rankingList.innerHTML = '';
+                let rank = 1;
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const item = document.createElement('div');
+                    item.className = 'flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100';
+                    item.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <span class="w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-600 text-xs font-bold rounded-full">${rank++}</span>
+                            <span class="font-bold text-slate-700">${data.nickname}</span>
+                        </div>
+                        <span class="font-black text-blue-600">${data.score}</span>
+                    `;
+                    rankingList.appendChild(item);
+                });
+            } catch (e) {
+                console.error("Error getting rankings: ", e);
+                rankingList.innerHTML = '<p class="text-red-400">랭킹을 불러올 수 없습니다.</p>';
+            }
+        }
+
+        // 다시 시작
+        document.getElementById('restart-btn').onclick = () => {
+            location.reload();
+        };
+    </script>
+</body>
+</html>
